@@ -1,0 +1,15 @@
+[project]
+name = "pywebdev"
+version = "0.1.0"
+description = "learning python web development"
+authors = [
+    {name = "lolikgiovi", email = "lolik.giovi@gmail.com"},
+]
+dependencies = []
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
