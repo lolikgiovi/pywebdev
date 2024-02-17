@@ -22,9 +22,9 @@ pkgs.mkShell {
     nodejs_20
     python311
     python311Packages.pip
-    pdm
+    pkgs.pdm
     redis
-    postgresql
+    pkgs.postgresql
   ];
 
   shellHook = ''
@@ -36,36 +36,38 @@ pkgs.mkShell {
   export PGHOST=localhost
   export PGUSER=postgres
   export PGPASSWORD=password
-  
+  # Ensure the NIX_SHELL_DIR exists
   if [ ! -d "$NIX_SHELL_DIR" ]; then
     mkdir -p $NIX_SHELL_DIR
   fi
-
-  # Attempt to gracefully stop PostgreSQL and Redis on shell exit
-  trap "pg_ctl -D $PGDATA stop; pkill redis-server" EXIT
   
-  # Initialize PostgreSQL database directory if it doesn't exist
+  trap \
+  "
+    pg_ctl -D $PGDATA stop
+    pkill redis-server
+  " \
+  EXIT
+  
   if [ ! -d "$PGDATA" ]; then
     initdb -D $PGDATA --no-locale --encoding=UTF8
   fi
-
-  # Adjust PostgreSQL authentication method for local connections
+  
   HOST_COMMON="host\s\+all\s\+all"
   sed -i "s|^$HOST_COMMON.*127.*$|host all all 0.0.0.0/0 trust|" $PGDATA/pg_hba.conf
   sed -i "s|^$HOST_COMMON.*::1.*$|host all all ::/0 trust|" $PGDATA/pg_hba.conf
   
-  # Start PostgreSQL, consider checking if it's already running or manage it outside of nix-shell
-  pg_ctl -D $PGDATA -l $PGDATA/postgres.log start || (echo "Failed to start PostgreSQL. Check $PGDATA/postgres.log for details." && exit 1)
+  pg_ctl -D $PGDATA -l $PGDATA/postgres.log -o "-c unix_socket_directories='$PGDATA'" -o "-c listen_addresses='*'" -o "-c log_destination='stderr'" -o "-c logging_collector=on" -o "-c log_directory='log'" -o "-c log_filename='postgresql-%Y-%m-%d_%H%M%S.log'" -o "-c log_min_messages=info" -o "-c log_min_error_statement=info" -o "-c log_connections=on" start || (echo "Failed to start PostgreSQL. Check $PGDATA/postgres.log for details." && exit 1)
   
-  # Setup PostgreSQL database and user if necessary
-  # Consider managing this outside of nix-shell for more predictable control
-  
-  # Redis startup with port check
-  if ! nc -z localhost 6379; then
-    nohup redis-server > $NIX_SHELL_DIR/redis.log 2>&1 &
-  else
-    echo "Redis is already running or port 6379 is in use."
+  echo "Setup database.. To access DB: psql -U $PGUSER -d postgres"
+  if ! psql -U $(whoami) -tAc "SELECT 1 FROM pg_database WHERE datname='development'" | grep -q 1; then
+    createuser -U $(whoami)
+    psql -U $(whoami) -d postgres -c "CREATE DATABASE $(whoami) OWNER $(whoami);" || true
+    psql -U $(whoami) -d postgres -c "ALTER ROLE $PGUSER SUPERUSER;"
+    psql -U "$PGUSER" -d postgres -c "CREATE DATABASE development" || true
   fi
+  
+  echo "Run redis.. See log on $NIX_SHELL_DIR/redis.log"
+  nohup redis-server > $NIX_SHELL_DIR/redis.log 2>&1 &
   '';
 
 }
