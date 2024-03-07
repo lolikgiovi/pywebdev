@@ -1,0 +1,17 @@
+[project]
+name = "day_6"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "lolikgiovi", email = "lolik.giovi@gmail.com"},
+]
+dependencies = [
+    "django>=5.0.3",
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
